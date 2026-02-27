@@ -93,10 +93,10 @@ func buildEntries(players []player) [][]int {
 		byTeam[p.Team] = append(byTeam[p.Team], p.ID)
 	}
 
-	out := make([][]int, 0, 495)
+	out := make([][]int, 0, 1000)
 
-	// 450 valid: real IDs in a legal formation (1 GK, 4 DEF, 4 MID, 2 FWD)
-	for range 450 {
+	// 960 valid: real IDs in a legal formation (1 GK, 4 DEF, 4 MID, 2 FWD)
+	for range 960 {
 		out = append(out, validTeam(rng, byPos))
 	}
 
@@ -127,21 +127,21 @@ func buildEntries(players []player) [][]int {
 		out = append(out, ids)
 	}
 
-	// 5 invalid: >3 players from the same team
-	for range 5 {
+	// 4 invalid: >3 players from the same team
+	for range 4 {
 		out = append(out, tooManyFromOneTeam(rng, byPos, byTeam))
 	}
 
-	// 5 invalid: 0 GKs
-	for range 5 {
+	// 4 invalid: 0 GKs
+	for range 4 {
 		ids := pick(rng, byPos[2], 4)
 		ids = append(ids, pick(rng, byPos[3], 5)...)
 		ids = append(ids, pick(rng, byPos[4], 2)...)
 		out = append(out, ids)
 	}
 
-	// 5 invalid: 2 GKs
-	for range 5 {
+	// 4 invalid: 2 GKs
+	for range 4 {
 		ids := pick(rng, byPos[1], 2)
 		ids = append(ids, pick(rng, byPos[2], 4)...)
 		ids = append(ids, pick(rng, byPos[3], 3)...)
@@ -149,8 +149,8 @@ func buildEntries(players []player) [][]int {
 		out = append(out, ids)
 	}
 
-	// 5 invalid: only 2 DEF
-	for range 5 {
+	// 4 invalid: only 2 DEF
+	for range 4 {
 		ids := pick(rng, byPos[1], 1)
 		ids = append(ids, pick(rng, byPos[2], 2)...)
 		ids = append(ids, pick(rng, byPos[3], 5)...)
@@ -158,8 +158,8 @@ func buildEntries(players []player) [][]int {
 		out = append(out, ids)
 	}
 
-	// 5 invalid: 0 FWD
-	for range 5 {
+	// 4 invalid: 0 FWD
+	for range 4 {
 		ids := pick(rng, byPos[1], 1)
 		ids = append(ids, pick(rng, byPos[2], 5)...)
 		ids = append(ids, pick(rng, byPos[3], 5)...)
