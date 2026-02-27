@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,11 +34,14 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 			ids = append(ids, id)
 		}
 
-		if err := dm.Store().ValidateStartingTeam(ids); err != nil {
+		store := dm.Store()
+
+		if err := store.ValidateStartingTeam(ids); err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"total_points": store.TeamEventPoints(ids)})
 	}
 }

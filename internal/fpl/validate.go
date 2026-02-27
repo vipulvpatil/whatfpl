@@ -61,3 +61,13 @@ func (s *Store) ValidateStartingTeam(playerIDs []int) error {
 
 	return nil
 }
+
+// TeamEventPoints returns the sum of current gameweek points for the given player IDs.
+// Call ValidateStartingTeam first to ensure the IDs are valid.
+func (s *Store) TeamEventPoints(playerIDs []int) int {
+	var total int
+	for _, id := range playerIDs {
+		total += s.Players[id].EventPoints
+	}
+	return total
+}
