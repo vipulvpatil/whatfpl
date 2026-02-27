@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-const ringSize = 1000
+const (
+	ringSize         = 1000
+	percentileInterval = 5 * time.Second
+)
 
 type Metrics struct {
 	start    time.Time
@@ -21,10 +24,15 @@ type Metrics struct {
 	ring    [ringSize]int64
 	ringPos int
 	full    bool
+
+	p50 atomic.Int64
+	p95 atomic.Int64
 }
 
 func New() *Metrics {
-	return &Metrics{start: time.Now()}
+	m := &Metrics{start: time.Now()}
+	go m.loop()
+	return m
 }
 
 func (m *Metrics) RecordRequest(statusCode int, latencyMs int64) {
@@ -50,17 +58,15 @@ func (m *Metrics) InflightAdd(delta int64) {
 	m.inflight.Add(delta)
 }
 
-type Snapshot struct {
-	UptimeSeconds  int64
-	RequestsTotal  int64
-	Errors4xxTotal int64
-	Errors5xxTotal int64
-	Inflight       int64
-	P50Ms          int64
-	P95Ms          int64
+func (m *Metrics) loop() {
+	ticker := time.NewTicker(percentileInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		m.recompute()
+	}
 }
 
-func (m *Metrics) Snapshot() Snapshot {
+func (m *Metrics) recompute() {
 	m.mu.Lock()
 	var raw []int64
 	if m.full {
@@ -73,15 +79,29 @@ func (m *Metrics) Snapshot() Snapshot {
 	m.mu.Unlock()
 
 	p50, p95 := percentiles(raw)
+	m.p50.Store(p50)
+	m.p95.Store(p95)
+}
 
+type Snapshot struct {
+	UptimeSeconds  int64
+	RequestsTotal  int64
+	Errors4xxTotal int64
+	Errors5xxTotal int64
+	Inflight       int64
+	P50Ms          int64
+	P95Ms          int64
+}
+
+func (m *Metrics) Snapshot() Snapshot {
 	return Snapshot{
 		UptimeSeconds:  int64(time.Since(m.start).Seconds()),
 		RequestsTotal:  m.total.Load(),
 		Errors4xxTotal: m.err4xx.Load(),
 		Errors5xxTotal: m.err5xx.Load(),
 		Inflight:       m.inflight.Load(),
-		P50Ms:          p50,
-		P95Ms:          p95,
+		P50Ms:          m.p50.Load(),
+		P95Ms:          m.p95.Load(),
 	}
 }
 
