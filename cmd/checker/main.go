@@ -1,0 +1,223 @@
+package main
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	serverURL    = "http://localhost:8080/players"
+	bootstrapURL = "https://fantasy.premierleague.com/api/bootstrap-static/"
+	interval     = 100 * time.Millisecond
+)
+
+func main() {
+	fplClient := &http.Client{Timeout: 15 * time.Second}
+
+	players, err := fetchPlayers(fplClient)
+	if err != nil {
+		log.Fatalf("failed to fetch FPL data: %v", err)
+	}
+
+	entries := buildEntries(players)
+	log.Printf("checker started: %d entries, firing every %s", len(entries), interval)
+
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		call(client, entries[rng.Intn(len(entries))])
+	}
+}
+
+func call(client *http.Client, ids []int) {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.Itoa(id)
+	}
+
+	resp, err := client.Get(serverURL + "?ids=" + strings.Join(parts, ","))
+	if err != nil {
+		log.Printf("ERR %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// player holds only what the checker needs from the FPL bootstrap.
+type player struct {
+	ID          int `json:"id"`
+	Team        int `json:"team"`
+	ElementType int `json:"element_type"` // 1=GK 2=DEF 3=MID 4=FWD
+}
+
+func fetchPlayers(client *http.Client) ([]player, error) {
+	resp, err := client.Get(bootstrapURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var data struct {
+		Elements []player `json:"elements"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	return data.Elements, nil
+}
+
+// buildEntries generates 500+ entries using real FPL player data.
+func buildEntries(players []player) [][]int {
+	rng := rand.New(rand.NewSource(42))
+
+	byPos := map[int][]int{1: {}, 2: {}, 3: {}, 4: {}}
+	byTeam := map[int][]int{}
+	for _, p := range players {
+		byPos[p.ElementType] = append(byPos[p.ElementType], p.ID)
+		byTeam[p.Team] = append(byTeam[p.Team], p.ID)
+	}
+
+	out := make([][]int, 0, 520)
+
+	// 300 valid: real IDs in a legal formation (1 GK, 4 DEF, 4 MID, 2 FWD)
+	for range 300 {
+		out = append(out, validTeam(rng, byPos))
+	}
+
+	// 50 invalid: too few players (1–10)
+	for range 50 {
+		n := rng.Intn(10) + 1
+		out = append(out, sample(rng, players, n))
+	}
+
+	// 50 invalid: too many players (12–16)
+	for range 50 {
+		n := rng.Intn(5) + 12
+		out = append(out, sample(rng, players, n))
+	}
+
+	// 50 invalid: duplicate IDs (10 distinct + first repeated)
+	for range 50 {
+		ids := sample(rng, players, 10)
+		out = append(out, append(ids, ids[0]))
+	}
+
+	// 50 invalid: non-existent player IDs
+	for range 50 {
+		ids := make([]int, 11)
+		for i := range ids {
+			ids[i] = 90000 + rng.Intn(9999)
+		}
+		out = append(out, ids)
+	}
+
+	// 10 invalid: >3 players from the same team
+	for range 10 {
+		out = append(out, tooManyFromOneTeam(rng, byPos, byTeam))
+	}
+
+	// 10 invalid: 0 GKs (2 GKs' slots filled with MIDs)
+	for range 10 {
+		ids := pick(rng, byPos[2], 4) // 4 DEF
+		ids = append(ids, pick(rng, byPos[3], 5)...) // 5 MID (no GK slot)
+		ids = append(ids, pick(rng, byPos[4], 2)...) // 2 FWD
+		out = append(out, ids)
+	}
+
+	// 10 invalid: 2 GKs
+	for range 10 {
+		ids := pick(rng, byPos[1], 2) // 2 GK
+		ids = append(ids, pick(rng, byPos[2], 4)...) // 4 DEF
+		ids = append(ids, pick(rng, byPos[3], 3)...) // 3 MID
+		ids = append(ids, pick(rng, byPos[4], 2)...) // 2 FWD
+		out = append(out, ids)
+	}
+
+	// 10 invalid: only 2 DEF (below minimum of 3)
+	for range 10 {
+		ids := pick(rng, byPos[1], 1)           // 1 GK
+		ids = append(ids, pick(rng, byPos[2], 2)...) // 2 DEF
+		ids = append(ids, pick(rng, byPos[3], 5)...) // 5 MID
+		ids = append(ids, pick(rng, byPos[4], 3)...) // 3 FWD
+		out = append(out, ids)
+	}
+
+	// 10 invalid: only 1 FWD below min — wait, 1 FWD is valid. Use 0 FWD instead.
+	for range 10 {
+		ids := pick(rng, byPos[1], 1)           // 1 GK
+		ids = append(ids, pick(rng, byPos[2], 5)...) // 5 DEF
+		ids = append(ids, pick(rng, byPos[3], 5)...) // 5 MID
+		out = append(out, ids)                        // 0 FWD
+	}
+
+	return out
+}
+
+// validTeam builds a legal 1-4-4-2 team from real player IDs.
+func validTeam(rng *rand.Rand, byPos map[int][]int) []int {
+	ids := pick(rng, byPos[1], 1)
+	ids = append(ids, pick(rng, byPos[2], 4)...)
+	ids = append(ids, pick(rng, byPos[3], 4)...)
+	ids = append(ids, pick(rng, byPos[4], 2)...)
+	return ids
+}
+
+// tooManyFromOneTeam builds an 11-player team with 4 players from one club.
+func tooManyFromOneTeam(rng *rand.Rand, byPos map[int][]int, byTeam map[int][]int) []int {
+	// Find a team with enough players
+	var clubIDs []int
+	for _, ids := range byTeam {
+		if len(ids) >= 4 {
+			clubIDs = ids
+			break
+		}
+	}
+	ids := pick(rng, clubIDs, 4)
+	// Fill remaining 7 spots avoiding position constraints — just use any valid formation
+	remaining := validTeam(rng, byPos)
+	// Deduplicate: remove from remaining any ID already in ids
+	inClub := make(map[int]bool, 4)
+	for _, id := range ids {
+		inClub[id] = true
+	}
+	for _, id := range remaining {
+		if !inClub[id] {
+			ids = append(ids, id)
+		}
+		if len(ids) == 11 {
+			break
+		}
+	}
+	return ids
+}
+
+// pick returns n randomly sampled (with replacement) IDs from src.
+func pick(rng *rand.Rand, src []int, n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = src[rng.Intn(len(src))]
+	}
+	return out
+}
+
+// sample returns n IDs drawn from the full player list (with replacement).
+func sample(rng *rand.Rand, players []player, n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = players[rng.Intn(len(players))].ID
+	}
+	return out
+}
