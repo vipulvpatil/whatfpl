@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"math"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/vipulvpatil/whatfpl/internal/fpl"
 	"github.com/vipulvpatil/whatfpl/internal/metrics"
 )
+
 
 func NewHandler(dm *fpl.DataManager) http.Handler {
 	m := metrics.New()
@@ -37,6 +40,8 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 			}
 			ids = append(ids, id)
 		}
+
+		time.Sleep(simulatedLatency())
 
 		store := dm.Store()
 
@@ -79,6 +84,14 @@ func withMetrics(m *metrics.Metrics, next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 		m.RecordRequest(rec.status, time.Since(start).Milliseconds())
 	})
+}
+
+// simulatedLatency returns a duration drawn from a normal distribution.
+// mean=200ms, stddev=150ms, clamped to [100, 1000]ms.
+func simulatedLatency() time.Duration {
+	ms := rand.NormFloat64()*150 + 200
+	ms = math.Max(100, math.Min(1000, ms))
+	return time.Duration(ms) * time.Millisecond
 }
 
 type statusRecorder struct {
