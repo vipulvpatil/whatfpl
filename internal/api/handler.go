@@ -22,11 +22,20 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 			return
 		}
 
-		for _, part := range strings.Split(raw, ",") {
-			if _, err := strconv.Atoi(strings.TrimSpace(part)); err != nil {
+		parts := strings.Split(raw, ",")
+		ids := make([]int, 0, len(parts))
+		for _, part := range parts {
+			id, err := strconv.Atoi(strings.TrimSpace(part))
+			if err != nil {
 				http.Error(w, "invalid id: "+part, http.StatusBadRequest)
 				return
 			}
+			ids = append(ids, id)
+		}
+
+		if err := dm.Store().ValidateStartingTeam(ids); err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
 		}
 
 		w.WriteHeader(http.StatusOK)
