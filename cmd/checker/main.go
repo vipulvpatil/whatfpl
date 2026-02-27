@@ -35,7 +35,10 @@ func main() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		call(client, entries[rng.Intn(len(entries))])
+		n := rng.Intn(10) + 1 // 1–10 concurrent requests per tick
+		for range n {
+			go call(client, entries[rng.Intn(len(entries))])
+		}
 	}
 }
 
