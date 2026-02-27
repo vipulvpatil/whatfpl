@@ -5,13 +5,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vipulvpatil/whatfpl/internal/fpl"
+	"github.com/vipulvpatil/whatfpl/internal/metrics"
 )
 
 func NewHandler(dm *fpl.DataManager) http.Handler {
+	m := metrics.New()
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /players", handlePlayers(dm))
+	mux.Handle("GET /players", withMetrics(m, handlePlayers(dm)))
+	mux.HandleFunc("GET /metrics", handleMetrics(m))
 	return mux
 }
 
@@ -44,4 +48,45 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]int{"total_points": store.TeamEventPoints(ids)})
 	}
+}
+
+func handleMetrics(m *metrics.Metrics) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s := m.Snapshot()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"uptime_seconds":  s.UptimeSeconds,
+			"requests_total":  s.RequestsTotal,
+			"errors_4xx_total": s.Errors4xxTotal,
+			"errors_5xx_total": s.Errors5xxTotal,
+			"inflight":        s.Inflight,
+			"latency_ms": map[string]int64{
+				"p50": s.P50Ms,
+				"p95": s.P95Ms,
+			},
+		})
+	}
+}
+
+// withMetrics wraps a handler to track inflight count, status codes, and latency.
+func withMetrics(m *metrics.Metrics, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.InflightAdd(1)
+		defer m.InflightAdd(-1)
+
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		start := time.Now()
+		next.ServeHTTP(rec, r)
+		m.RecordRequest(rec.status, time.Since(start).Milliseconds())
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
 }
