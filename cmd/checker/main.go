@@ -55,8 +55,10 @@ func call(client *http.Client, ids []int) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	log.Printf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 400 {
+		log.Printf("ERR status=%d", resp.StatusCode)
+	}
 }
 
 // player holds only what the checker needs from the FPL bootstrap.
