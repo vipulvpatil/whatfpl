@@ -26,7 +26,7 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		raw := r.URL.Query().Get("ids")
 		if raw == "" {
-			http.Error(w, "missing ids", http.StatusBadRequest)
+			writeError(w, "missing ids", http.StatusBadRequest)
 			return
 		}
 
@@ -35,7 +35,7 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 		for _, part := range parts {
 			id, err := strconv.Atoi(strings.TrimSpace(part))
 			if err != nil {
-				http.Error(w, "invalid id: "+part, http.StatusBadRequest)
+				writeError(w, "invalid id: "+part, http.StatusBadRequest)
 				return
 			}
 			ids = append(ids, id)
@@ -46,7 +46,7 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 		store := dm.Store()
 
 		if err := store.ValidateStartingTeam(ids); err != nil {
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			writeError(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
 
@@ -114,4 +114,10 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 		r.WriteHeader(http.StatusOK)
 	}
 	return r.ResponseWriter.Write(b)
+}
+
+func writeError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
