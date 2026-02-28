@@ -79,7 +79,7 @@ func withMetrics(m *metrics.Metrics, next http.Handler) http.Handler {
 		m.InflightAdd(1)
 		defer m.InflightAdd(-1)
 
-		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		rec := &statusRecorder{ResponseWriter: w}
 		start := time.Now()
 		next.ServeHTTP(rec, r)
 		m.RecordRequest(rec.status, time.Since(start).Milliseconds())
@@ -96,10 +96,22 @@ func simulatedLatency() time.Duration {
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status  int
+	written bool
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
+	if r.written {
+		return
+	}
+	r.written = true
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if !r.written {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(b)
 }
