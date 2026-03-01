@@ -1,0 +1,12 @@
+services:
+  baseline:
+    image: whatfpl:baseline
+    ports:
+      - "8080:8080"
+
+  canary:
+    image: whatfpl:canary
+    ports:
+      - "8081:8080"
+    profiles:
+      - canary

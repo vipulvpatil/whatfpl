@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"io"
 	"log"
 	"math/rand"
@@ -12,7 +13,6 @@ import (
 )
 
 const (
-	serverURL      = "http://localhost:8080/players"
 	bootstrapURL   = "https://fantasy.premierleague.com/api/bootstrap-static/"
 	interval       = 100 * time.Millisecond
 	maxConcurrent  = 20
@@ -20,6 +20,14 @@ const (
 )
 
 func main() {
+	targetsFlag := flag.String("targets", "http://localhost:8080", "comma-separated list of server base URLs")
+	flag.Parse()
+
+	targets := strings.Split(*targetsFlag, ",")
+	for i, t := range targets {
+		targets[i] = strings.TrimRight(t, "/") + "/players"
+	}
+
 	fplClient := &http.Client{Timeout: 15 * time.Second}
 
 	players, err := fetchPlayers(fplClient)
@@ -43,9 +51,10 @@ func main() {
 			select {
 			case sem <- struct{}{}:
 				ids := entries[rng.Intn(len(entries))]
+				target := targets[rng.Intn(len(targets))]
 				go func() {
 					defer func() { <-sem }()
-					call(client, ids)
+					call(client, target, ids)
 				}()
 			default:
 				// at capacity, skip
@@ -54,13 +63,13 @@ func main() {
 	}
 }
 
-func call(client *http.Client, ids []int) {
+func call(client *http.Client, target string, ids []int) {
 	parts := make([]string, len(ids))
 	for i, id := range ids {
 		parts[i] = strconv.Itoa(id)
 	}
 
-	resp, err := client.Get(serverURL + "?ids=" + strings.Join(parts, ","))
+	resp, err := client.Get(target + "?ids=" + strings.Join(parts, ","))
 	if err != nil {
 		log.Printf("ERR %v", err)
 		return
