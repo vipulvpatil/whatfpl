@@ -11,6 +11,17 @@ services:
     profiles:
       - canary
 
+  checker:
+    build:
+      context: .
+      dockerfile: Dockerfile.checker
+    command: ["./checker", "-targets", "http://baseline:8080,http://canary:8080"]
+    depends_on:
+      - baseline
+      - canary
+    profiles:
+      - canary
+
   prometheus:
     image: prom/prometheus:latest
     ports:
