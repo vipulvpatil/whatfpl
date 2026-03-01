@@ -18,7 +18,7 @@ func NewHandler(dm *fpl.DataManager) http.Handler {
 	m := metrics.New()
 	mux := http.NewServeMux()
 	mux.Handle("GET /players", withMetrics(m, handlePlayers(dm)))
-	mux.HandleFunc("GET /metrics", handleMetrics(m))
+	mux.Handle("GET /metrics", m.PrometheusHandler())
 	return mux
 }
 
@@ -52,24 +52,6 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]int{"total_points": store.TeamEventPoints(ids)})
-	}
-}
-
-func handleMetrics(m *metrics.Metrics) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s := m.Snapshot()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"uptime_seconds":  s.UptimeSeconds,
-			"requests_total":  s.RequestsTotal,
-			"errors_4xx_total": s.Errors4xxTotal,
-			"errors_5xx_total": s.Errors5xxTotal,
-			"inflight":        s.Inflight,
-			"latency_ms": map[string]int64{
-				"p50": s.P50Ms,
-				"p95": s.P95Ms,
-			},
-		})
 	}
 }
 

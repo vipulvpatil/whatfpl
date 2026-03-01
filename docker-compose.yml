@@ -10,3 +10,10 @@ services:
       - "8081:8080"
     profiles:
       - canary
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
