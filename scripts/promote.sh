@@ -39,5 +39,6 @@ echo "Promoting canary → baseline..."
 docker tag whatfpl:canary whatfpl:baseline
 docker compose -f "$ROOT/docker-compose.yml" up -d --no-deps --force-recreate baseline
 docker compose -f "$ROOT/docker-compose.yml" --profile canary stop canary
+docker compose -f "$ROOT/docker-compose.yml" restart checker
 
-echo "Done. Baseline updated on :8080, canary stopped."
+echo "Done. Baseline updated on :8080, canary stopped, checker restarted (baseline-only traffic)."

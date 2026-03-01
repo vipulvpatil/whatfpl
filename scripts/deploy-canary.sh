@@ -7,5 +7,6 @@ echo "Deploying canary..."
 
 docker build -t whatfpl:canary "$ROOT"
 docker compose -f "$ROOT/docker-compose.yml" --profile canary up -d --no-deps --force-recreate canary
+docker compose -f "$ROOT/docker-compose.yml" up -d checker
 
-echo "Done. Canary running on :8081."
+echo "Done. Canary running on :8081, checker running."

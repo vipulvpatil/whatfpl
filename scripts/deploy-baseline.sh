@@ -7,5 +7,6 @@ echo "Deploying baseline..."
 
 docker build -t whatfpl:baseline "$ROOT"
 docker compose -f "$ROOT/docker-compose.yml" up -d --no-deps --force-recreate baseline
+docker compose -f "$ROOT/docker-compose.yml" up -d checker
 
-echo "Done. Baseline running on :8080."
+echo "Done. Baseline running on :8080, checker running."
