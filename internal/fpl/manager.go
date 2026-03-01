@@ -3,11 +3,15 @@ package fpl
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"sync/atomic"
 	"time"
 )
 
-const refreshInterval = 5 * time.Minute
+const (
+	refreshInterval = 5 * time.Minute
+	refreshJitter   = 30 * time.Second
+)
 
 type DataManager struct {
 	store atomic.Pointer[Store]
@@ -40,9 +44,9 @@ func (dm *DataManager) refresh() error {
 }
 
 func (dm *DataManager) loop() {
-	ticker := time.NewTicker(refreshInterval)
-	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		jitter := time.Duration(rand.Int63n(int64(refreshJitter)))
+		time.Sleep(refreshInterval + jitter)
 		if err := dm.refresh(); err != nil {
 			log.Printf("fpl: refresh failed: %v", err)
 		} else {
