@@ -85,12 +85,12 @@ rate(whatfpl_requests_total[1m])
 rate(whatfpl_errors_4xx_total[1m]) + rate(whatfpl_errors_5xx_total[1m])
 
 # p95 latency per job
-histogram_quantile(0.95, rate(whatfpl_request_duration_ms_bucket[1m]))
+histogram_quantile(0.95, sum by (le) (rate(whatfpl_request_duration_ms_bucket[1m])))
 
 # compare p95: canary vs baseline
-histogram_quantile(0.95, rate(whatfpl_request_duration_ms_bucket{job="canary"}[1m]))
+histogram_quantile(0.95, sum by (le) (rate(whatfpl_request_duration_ms_bucket{job="canary"}[1m])))
   /
-histogram_quantile(0.95, rate(whatfpl_request_duration_ms_bucket{job="baseline"}[1m]))
+histogram_quantile(0.95, sum by (le) (rate(whatfpl_request_duration_ms_bucket{job="baseline"}[1m])))
 
 # inflight requests
 whatfpl_inflight_requests
