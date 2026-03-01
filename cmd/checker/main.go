@@ -12,9 +12,11 @@ import (
 )
 
 const (
-	serverURL    = "http://localhost:8080/players"
-	bootstrapURL = "https://fantasy.premierleague.com/api/bootstrap-static/"
-	interval     = 100 * time.Millisecond
+	serverURL      = "http://localhost:8080/players"
+	bootstrapURL   = "https://fantasy.premierleague.com/api/bootstrap-static/"
+	interval       = 100 * time.Millisecond
+	maxConcurrent  = 20
+	requestTimeout = 3 * time.Second
 )
 
 func main() {
@@ -29,7 +31,8 @@ func main() {
 	log.Printf("checker started: %d entries, firing every %s", len(entries), interval)
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: requestTimeout}
+	sem := make(chan struct{}, maxConcurrent)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -37,7 +40,16 @@ func main() {
 	for range ticker.C {
 		n := rng.Intn(10) + 1 // 1–10 concurrent requests per tick
 		for range n {
-			go call(client, entries[rng.Intn(len(entries))])
+			select {
+			case sem <- struct{}{}:
+				ids := entries[rng.Intn(len(entries))]
+				go func() {
+					defer func() { <-sem }()
+					call(client, ids)
+				}()
+			default:
+				// at capacity, skip
+			}
 		}
 	}
 }
