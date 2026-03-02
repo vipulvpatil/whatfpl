@@ -15,16 +15,18 @@ import (
 )
 
 type Config struct {
-	FaultRate5xx  float64 // fraction of requests → 500
-	FaultRate4xx  float64 // fraction of requests → 400
-	LatencyMeanMs float64 // latency normal distribution mean (default 200)
+	FaultRate5xx      float64 // fraction of requests → 500
+	FaultRate4xx      float64 // fraction of requests → 400
+	LatencyMeanMs     float64 // latency normal distribution mean (default 200)
+	LatencySpikeRate  float64 // fraction of requests that spike to 3000ms (elevates p99, not p95)
 }
 
 func configFromEnv() Config {
 	return Config{
-		FaultRate5xx:  parseEnvFloat("FAULT_5XX_RATE", 0),
-		FaultRate4xx:  parseEnvFloat("FAULT_4XX_RATE", 0),
-		LatencyMeanMs: parseEnvFloat("FAULT_LATENCY_MEAN_MS", 200),
+		FaultRate5xx:     parseEnvFloat("FAULT_5XX_RATE", 0),
+		FaultRate4xx:     parseEnvFloat("FAULT_4XX_RATE", 0),
+		LatencyMeanMs:    parseEnvFloat("FAULT_LATENCY_MEAN_MS", 200),
+		LatencySpikeRate: parseEnvFloat("FAULT_LATENCY_SPIKE_RATE", 0),
 	}
 }
 
@@ -74,7 +76,7 @@ func handlePlayers(dm *fpl.DataManager, cfg Config) http.HandlerFunc {
 			ids = append(ids, id)
 		}
 
-		time.Sleep(simulatedLatency(cfg.LatencyMeanMs))
+		time.Sleep(simulatedLatency(cfg.LatencyMeanMs, cfg.LatencySpikeRate))
 
 		store := dm.Store()
 
@@ -103,7 +105,12 @@ func withMetrics(m *metrics.Metrics, next http.Handler) http.Handler {
 
 // simulatedLatency returns a duration drawn from a normal distribution.
 // stddev=150ms, clamped to [100, 3000]ms.
-func simulatedLatency(meanMs float64) time.Duration {
+// When spikeRate > 0, that fraction of requests jump straight to 3000ms,
+// which elevates p99 without meaningfully affecting p95.
+func simulatedLatency(meanMs, spikeRate float64) time.Duration {
+	if spikeRate > 0 && rand.Float64() < spikeRate {
+		return 3000 * time.Millisecond
+	}
 	ms := rand.NormFloat64()*150 + meanMs
 	ms = math.Max(100, math.Min(3000, ms))
 	return time.Duration(ms) * time.Millisecond
