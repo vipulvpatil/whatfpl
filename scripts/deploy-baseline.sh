@@ -5,7 +5,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Deploying baseline..."
 
-docker build -t whatfpl:baseline "$ROOT"
+COMMIT=$(git -C "$ROOT" rev-parse --short=8 HEAD)
+TS=$(date +%Y%m%d-%H%M%S)
+docker build -t whatfpl:baseline -t "whatfpl:${COMMIT}-${TS}" "$ROOT"
 docker compose -f "$ROOT/docker-compose.yml" up -d --no-deps --force-recreate baseline
 docker compose -f "$ROOT/docker-compose.yml" up -d checker
 

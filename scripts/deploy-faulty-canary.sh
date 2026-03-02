@@ -5,7 +5,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Deploying faulty canary..."
 
-docker build -t whatfpl:canary "$ROOT"
+COMMIT=$(git -C "$ROOT" rev-parse --short=8 HEAD)
+TS=$(date +%Y%m%d-%H%M%S)
+docker build -t whatfpl:canary -t "whatfpl:${COMMIT}-${TS}" "$ROOT"
 FAULT_5XX_RATE=0.3 FAULT_4XX_RATE=0.15 FAULT_LATENCY_MEAN_MS=800 \
   docker compose -f "$ROOT/docker-compose.yml" --profile canary up -d --no-deps --force-recreate canary
 docker compose -f "$ROOT/docker-compose.yml" up -d checker
