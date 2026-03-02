@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GOODTOGO_BIN="${GOODTOGO_BIN:-$ROOT/../goodtogo/goodtogo}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
+GOODTOGO_DATA_DIR="${GOODTOGO_DATA_DIR:-$ROOT/../goodtogo}"
 
 if [[ ! -x "$GOODTOGO_BIN" ]]; then
   echo "goodtogo binary not found at $GOODTOGO_BIN"
@@ -16,7 +17,7 @@ echo "Running goodtogo check..."
 echo ""
 
 set +e
-PROMETHEUS_URL="$PROMETHEUS_URL" "$GOODTOGO_BIN"
+PROMETHEUS_URL="$PROMETHEUS_URL" GOODTOGO_DATA_DIR="$GOODTOGO_DATA_DIR" "$GOODTOGO_BIN"
 GOODTOGO_EXIT=$?
 set -e
 
