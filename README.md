@@ -79,13 +79,13 @@ Open [http://localhost:9090](http://localhost:9090) and query across both instan
 
 ```promql
 # request rate per job
-rate(whatfpl_requests_total[1m])
+sum by (job) (rate(whatfpl_requests_total[1m]))
 
 # error rate (4xx + 5xx) per job
-rate(whatfpl_errors_4xx_total[1m]) + rate(whatfpl_errors_5xx_total[1m])
+sum by (job) (rate(whatfpl_errors_4xx_total[1m])) + sum by (job) (rate(whatfpl_errors_5xx_total[1m]))
 
 # p95 latency per job
-histogram_quantile(0.95, sum by (le) (rate(whatfpl_request_duration_ms_bucket[1m])))
+histogram_quantile(0.95, sum by (le, job) (rate(whatfpl_request_duration_ms_bucket[1m])))
 
 # compare p95: canary vs baseline
 histogram_quantile(0.95, sum by (le) (rate(whatfpl_request_duration_ms_bucket{job="canary"}[1m])))
