@@ -10,6 +10,10 @@ services:
       - "8081:8080"
     profiles:
       - canary
+    environment:
+      - FAULT_5XX_RATE=${FAULT_5XX_RATE:-0}
+      - FAULT_4XX_RATE=${FAULT_4XX_RATE:-0}
+      - FAULT_LATENCY_MEAN_MS=${FAULT_LATENCY_MEAN_MS:-200}
 
   checker:
     build:

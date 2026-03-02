@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,17 +14,49 @@ import (
 	"github.com/vipulvpatil/whatfpl/internal/metrics"
 )
 
+type Config struct {
+	FaultRate5xx  float64 // fraction of requests → 500
+	FaultRate4xx  float64 // fraction of requests → 400
+	LatencyMeanMs float64 // latency normal distribution mean (default 200)
+}
+
+func configFromEnv() Config {
+	return Config{
+		FaultRate5xx:  parseEnvFloat("FAULT_5XX_RATE", 0),
+		FaultRate4xx:  parseEnvFloat("FAULT_4XX_RATE", 0),
+		LatencyMeanMs: parseEnvFloat("FAULT_LATENCY_MEAN_MS", 200),
+	}
+}
+
+func parseEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
 
 func NewHandler(dm *fpl.DataManager) http.Handler {
+	cfg := configFromEnv()
 	m := metrics.New()
 	mux := http.NewServeMux()
-	mux.Handle("GET /players", withMetrics(m, handlePlayers(dm)))
+	mux.Handle("GET /players", withMetrics(m, handlePlayers(dm, cfg)))
 	mux.Handle("GET /metrics", m.PrometheusHandler())
 	return mux
 }
 
-func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
+func handlePlayers(dm *fpl.DataManager, cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.FaultRate5xx > 0 && rand.Float64() < cfg.FaultRate5xx {
+			writeError(w, "internal fault injected", http.StatusInternalServerError)
+			return
+		}
+		if cfg.FaultRate4xx > 0 && rand.Float64() < cfg.FaultRate4xx {
+			writeError(w, "fault injected", http.StatusBadRequest)
+			return
+		}
+
 		raw := r.URL.Query().Get("ids")
 		if raw == "" {
 			writeError(w, "missing ids", http.StatusBadRequest)
@@ -41,7 +74,7 @@ func handlePlayers(dm *fpl.DataManager) http.HandlerFunc {
 			ids = append(ids, id)
 		}
 
-		time.Sleep(simulatedLatency())
+		time.Sleep(simulatedLatency(cfg.LatencyMeanMs))
 
 		store := dm.Store()
 
@@ -69,10 +102,10 @@ func withMetrics(m *metrics.Metrics, next http.Handler) http.Handler {
 }
 
 // simulatedLatency returns a duration drawn from a normal distribution.
-// mean=200ms, stddev=150ms, clamped to [100, 1000]ms.
-func simulatedLatency() time.Duration {
-	ms := rand.NormFloat64()*150 + 200
-	ms = math.Max(100, math.Min(1000, ms))
+// stddev=150ms, clamped to [100, 3000]ms.
+func simulatedLatency(meanMs float64) time.Duration {
+	ms := rand.NormFloat64()*150 + meanMs
+	ms = math.Max(100, math.Min(3000, ms))
 	return time.Duration(ms) * time.Millisecond
 }
 
